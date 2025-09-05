@@ -94,9 +94,9 @@ function randomize_seq(strength)
     -- Stronger partial randomization (40% of loop_length)
     local num_to_change = math.max(1, math.floor(loop_length * 0.4 + 0.5))
     
-    -- Create a list of indices we can change (excluding first note)
+    -- Create a list of indices we can change -- to exclude the first note change this: for i = 1, loop_length do to for i = 2, loop_length do
     local changeable_indices = {}
-    for i = 2, loop_length do
+    for i = 1, loop_length do
       table.insert(changeable_indices, i)
     end
     
@@ -117,9 +117,9 @@ function randomize_seq(strength)
     -- Calculate how many notes to change (15% of loop_length, minimum 1)
     local num_to_change = math.max(1, math.floor(loop_length * 0.15 + 0.5))
     
-    -- Create a list of indices we can change (excluding first note)
+    -- Create a list of indices we can change -- to exclude the first note change this: for i = 1, loop_length do to for i = 2, loop_length do
     local changeable_indices = {}
-    for i = 2, loop_length do
+    for i = 1, loop_length do
       table.insert(changeable_indices, i)
     end
     
@@ -216,8 +216,8 @@ function redraw()
     end
     
     -- Draw horizontal line representing the step value
-    -- Add offset to keep lines above baseline (15 is baseline offset, +12 keeps negative values visible)
-    screen.move(x_pos, 15 + data[i] + 12)
+    -- Add offset to keep lines above baseline (16 is baseline offset, +12 keeps negative values visible)
+    screen.move(x_pos, 16 + data[i] + 12)
     screen.line_rel(5, 0)
     screen.stroke()
   end
