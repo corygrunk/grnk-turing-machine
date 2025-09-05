@@ -1,13 +1,20 @@
 -- grunk-turing-machine
 -- crow is now a turing machine
+
 Tab = require('tabutil')
+MusicUtil = require('musicutil')
+
+scale_names = {}
+notes = {}
+
 local enc1 = 0
 local enc2 = 8
 local enc3 = 5
+
 counter = 0
 loop_length = 8
 data = {999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999}
-scale = {0,3,5,7,9,12,999}
+-- scale = {0,3,5,7,9,12,999} -- replacing this with the notes variable
 knob_val = 0
 timings = {2, 1, 1/2, 1/3, 1/4, 1/8, 1/16}
 timings_display = {'2', '1', '1/2', '1/3', '1/4', '1/8', '1/16'}
@@ -16,13 +23,46 @@ rand_display = {'locked', 'evolve a bit', 'evolve', 'randomize'}
 
 
 function init() 
-  clock.run(redraw_clock)
-  
   crow.input[1].mode('stream', 0.1)
   crow.output[2].action = "ar(0.01, 0.5, 8, 'linear')"
+  
+  for i = 1, #MusicUtil.SCALES do
+    table.insert(scale_names, MusicUtil.SCALES[i].name)
+  end
+
+  params:add_separator("TURING MACHINE")
+  
+  -- setting root notes using params
+  params:add{type = "number", id = "root_note", name = "root note",
+    min = 0, max = 127, default = 60, formatter = function(param) return MusicUtil.note_num_to_name(param:get(), true) end,
+    action = function() build_scale() end} -- by employing build_scale() here, we update the scale
+
+  -- setting scale type using params
+  params:add{type = "option", id = "scale", name = "scale",
+    options = scale_names, default = 5,
+    action = function() build_scale() end} -- by employing build_scale() here, we update the scale
+
+  build_scale() -- builds initial scale
+  
+  clock.run(redraw_clock)
   clock.run(main_clock)
   
   screen_dirty = true
+end
+
+function build_scale()
+  -- Generate scale notes (MIDI note numbers)
+  local scale_notes = MusicUtil.generate_scale(params:get("root_note"), params:get("scale"), 2)
+  
+  -- Convert to CV voltages (semitones relative to C4)
+  notes = {}
+  for i = 1, #scale_notes do
+    local cv_value = (scale_notes[i] - 60) -- Convert MIDI to semitones from C4
+    table.insert(notes, cv_value)
+  end
+  
+  -- Add rest value
+  table.insert(notes, 999)
 end
 
 function main_clock()
@@ -36,7 +76,9 @@ function main_clock()
         
     end
     if data[counter] ~= 999 then
-      crow.output[1].volts = data[counter]/12
+      -- Convert display value back to actual CV relative to root note
+      local actual_cv = (params:get("root_note") + data[counter] - 60) / 12
+      crow.output[1].volts = actual_cv
       crow.output[2]()
     end
     screen_dirty = true
@@ -46,7 +88,7 @@ end
 function randomize_seq(strength)
   if strength == 0 then
     for i = 1, #data do
-      data[i] = scale[math.random(1, #scale)]
+      data[i] = notes[math.random(1, #notes)]
     end
   elseif strength == -1 or strength == 1 then
     -- Stronger partial randomization (40% of loop_length)
@@ -65,7 +107,7 @@ function randomize_seq(strength)
         local idx_to_change = changeable_indices[random_idx]
         
         -- Change the note at this index
-        data[idx_to_change] = scale[math.random(1, #scale)]
+        data[idx_to_change] = notes[math.random(1, #notes)]
         
         -- Remove this index so we don't change it again
         table.remove(changeable_indices, random_idx)
@@ -88,7 +130,7 @@ function randomize_seq(strength)
         local idx_to_change = changeable_indices[random_idx]
         
         -- Change the note at this index
-        data[idx_to_change] = scale[math.random(1, #scale)]
+        data[idx_to_change] = notes[math.random(1, #notes)]
         
         -- Remove this index so we don't change it again
         table.remove(changeable_indices, random_idx)
@@ -174,7 +216,8 @@ function redraw()
     end
     
     -- Draw horizontal line representing the step value
-    screen.move(x_pos, 40 + data[i])
+    -- Add offset to keep lines above baseline (15 is baseline offset, +12 keeps negative values visible)
+    screen.move(x_pos, 15 + data[i] + 12)
     screen.line_rel(5, 0)
     screen.stroke()
   end
