@@ -1,15 +1,19 @@
 -- grunk-turing-machine
 -- crow is now a turing machine
-
 Tab = require('tabutil')
 local enc1 = 0
-local enc2 = 0
-local enc3 = 1.0
-
+local enc2 = 8
+local enc3 = 5
 counter = 0
-data = {999,999,999,999,999,999,999,999}
+loop_length = 8
+data = {999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999}
 scale = {0,3,5,7,9,12,999}
 knob_val = 0
+timings = {2, 1, 1/2, 1/3, 1/4, 1/8, 1/16}
+timings_display = {'2', '1', '1/2', '1/3', '1/4', '1/8', '1/16'}
+selected_timing = 5
+rand_display = {'locked', 'evolve a bit', 'evolve', 'randomize'}
+
 
 function init() 
   clock.run(redraw_clock)
@@ -23,14 +27,11 @@ end
 
 function main_clock()
   while true do
-    clock.sync(1)
+    clock.sync(timings[selected_timing])
     counter = counter + 1
-    if counter > #data then counter = 1 end
-    if knob_val == 0 then
-      for i = 1, #data do
-        data[i] = scale[math.random(1, #scale)]
-      end
-      
+    if counter > loop_length then counter = 1 end
+    if counter == 1 then
+      randomize_seq(knob_val)
     else
         
     end
@@ -38,40 +39,101 @@ function main_clock()
       crow.output[1].volts = data[counter]/12
       crow.output[2]()
     end
-
     screen_dirty = true
   end
+end
+
+function randomize_seq(strength)
+  if strength == 0 then
+    for i = 1, #data do
+      data[i] = scale[math.random(1, #scale)]
+    end
+  elseif strength == -1 or strength == 1 then
+    -- Stronger partial randomization (40% of loop_length)
+    local num_to_change = math.max(1, math.floor(loop_length * 0.4 + 0.5))
+    
+    -- Create a list of indices we can change (excluding first note)
+    local changeable_indices = {}
+    for i = 2, loop_length do
+      table.insert(changeable_indices, i)
+    end
+    
+    -- Randomly select which indices to change
+    for j = 1, num_to_change do
+      if #changeable_indices > 0 then
+        local random_idx = math.random(1, #changeable_indices)
+        local idx_to_change = changeable_indices[random_idx]
+        
+        -- Change the note at this index
+        data[idx_to_change] = scale[math.random(1, #scale)]
+        
+        -- Remove this index so we don't change it again
+        table.remove(changeable_indices, random_idx)
+      end
+    end
+  elseif strength == -3 or strength == -2 or strength == 2 or strength == 3 then
+    -- Calculate how many notes to change (15% of loop_length, minimum 1)
+    local num_to_change = math.max(1, math.floor(loop_length * 0.15 + 0.5))
+    
+    -- Create a list of indices we can change (excluding first note)
+    local changeable_indices = {}
+    for i = 2, loop_length do
+      table.insert(changeable_indices, i)
+    end
+    
+    -- Randomly select which indices to change
+    for j = 1, num_to_change do
+      if #changeable_indices > 0 then
+        local random_idx = math.random(1, #changeable_indices)
+        local idx_to_change = changeable_indices[random_idx]
+        
+        -- Change the note at this index
+        data[idx_to_change] = scale[math.random(1, #scale)]
+        
+        -- Remove this index so we don't change it again
+        table.remove(changeable_indices, random_idx)
+      end
+    end
+  elseif strength == -4 or strength == -5 or strength == 4 or strength == 5 then
+    print('locked')    
+  end
+end
+
+function clear_seq()
+  for i = 1, #data do
+    data[i] = 999
+  end    
 end
 
 crow.input[1].stream = function(v)
   knob_val = math.floor(v)
 end
 
-
-
 function key(n,z)
   if n == 1 and z == 1 then
     print('Key 1')
   elseif n == 2 and z == 1 then
     print('Key 2')
+    randomize_seq(0)
   elseif n == 3 and z == 1 then
     print('Key 3')
+    clear_seq()
   end
   screen_dirty = true
 end
-
 
 function enc(n,d)
   if n == 1 then
-    enc1 = util.clamp(enc1 + d,0,100)
+    print(enc1)
   elseif n == 2 then
-    enc2 = util.clamp(enc2 + d,0,100)
+    enc2 = util.clamp(enc2 + d,1,16)
+    loop_length = enc2
   elseif n == 3 then
-    enc3 = util.clamp(enc3 + d/100,0,2)
+    enc3 = util.clamp(enc3 + d,1,#timings)
+    selected_timing = enc3
   end
   screen_dirty = true
 end
-
 
 function redraw()
   screen.clear()
@@ -79,17 +141,30 @@ function redraw()
   screen.font_face(1)
   screen.font_size(8)
   screen.level(15)
-  -- screen.pixel(0, 0) ----------- make a pixel at the north-western most terminus
-  -- screen.pixel(127, 0) --------- and at the north-eastern
-  -- screen.pixel(127, 63) -------- and at the south-eastern
-  -- screen.pixel(0, 63) ---------- and at the south-western
-
+  
   screen.move(10, 15)
-  screen.text('Turning machine')
+  if knob_val == -5 or knob_val == -4 or knob_val == 4 or knob_val == 5 then
+    screen.text(rand_display[1])
+  elseif knob_val == -3 or knob_val == -2 or knob_val == 2 or knob_val == 3 then
+    screen.text(rand_display[2])
+  elseif knob_val == -1 or knob_val == 1 then
+    screen.text(rand_display[3])
+  else
+    screen.text(rand_display[4])
+  end
+  
+  screen.move(117, 15)
+  screen.text_right(timings_display[selected_timing])
+  
+  -- Calculate step width to fit 16 steps across screen with padding
+  local start_x = 8
+  local end_x = 120
+  local step_width = (end_x - start_x) / (#data - 1)
   
   for i = 1, #data do
-    screen.move(i*10, 30)
-    if data[i] == 999 then
+    local x_pos = start_x + (i - 1) * step_width
+    
+    if data[i] == 999 or i > loop_length then
       screen.level(0)
     else
       screen.level(6)
@@ -97,23 +172,24 @@ function redraw()
     if counter == i then
       screen.level(15)
     end
-    screen.move(i*10, 40 + data[i])
-    screen.line_rel(6,0)
+    
+    -- Draw horizontal line representing the step value
+    screen.move(x_pos, 40 + data[i])
+    screen.line_rel(5, 0)
     screen.stroke()
   end
   
+  -- Draw baseline
   screen.level(2)
-  screen.move(10, 55)
-  screen.line_rel(76,0)
+  screen.move(start_x, 55)
+  local baseline_end_x = start_x + (loop_length) * step_width
+  screen.line_rel(baseline_end_x - start_x, 0)
   screen.stroke()
-
-
-  screen.fill() ---------------- fill the termini and message at once
-  screen.update() -------------- update space
-
+  
+  screen.fill()
+  screen.update()
   screen_dirty = false
 end
-
 
 function redraw_clock()
   while true do
@@ -124,7 +200,6 @@ function redraw_clock()
     end
   end
 end
-
 
 
 -- UTILITY TO RESTART SCRIPT FROM MAIDEN
