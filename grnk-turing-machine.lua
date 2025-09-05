@@ -7,20 +7,12 @@ MusicUtil = require('musicutil')
 scale_names = {}
 notes = {}
 
-local enc1 = 0
-local enc2 = 8
-local enc3 = 5
-
+alt_mode = false
 counter = 0
 loop_length = 8
 data = {999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999}
--- scale = {0,3,5,7,9,12,999} -- replacing this with the notes variable
 knob_val = 0
-timings = {2, 1, 1/2, 1/3, 1/4, 1/8, 1/16}
-timings_display = {'2', '1', '1/2', '1/3', '1/4', '1/8', '1/16'}
-selected_timing = 5
 rand_display = {'locked', 'evolve a bit', 'evolve', 'randomize'}
-
 
 function init() 
   crow.input[1].mode('stream', 0.1)
@@ -43,6 +35,13 @@ function init()
     action = function() build_scale() end} -- by employing build_scale() here, we update the scale
 
   build_scale() -- builds initial scale
+  
+  params:add{type = "option", id = "note_div", name = "note division",
+  options = {1, 2, 4, 8, 16},
+  default = 3}
+
+  params:add{type = "number", id = "prob", name = "probability",
+  min = 0, max = 100, default = 75}
   
   clock.run(redraw_clock)
   clock.run(main_clock)
@@ -67,7 +66,7 @@ end
 
 function main_clock()
   while true do
-    clock.sync(timings[selected_timing])
+    clock.sync(1/params:get("note_div"))
     counter = counter + 1
     if counter > loop_length then counter = 1 end
     if counter == 1 then
@@ -76,10 +75,12 @@ function main_clock()
         
     end
     if data[counter] ~= 999 then
-      -- Convert display value back to actual CV relative to root note
-      local actual_cv = (params:get("root_note") + data[counter] - 60) / 12
-      crow.output[1].volts = actual_cv
-      crow.output[2]()
+      if math.random(0,99) < params:get("prob") then
+        -- Convert display value back to actual CV relative to root note
+        local actual_cv = (params:get("root_note") + data[counter] - 60) / 12
+        crow.output[1].volts = actual_cv
+        crow.output[2]()
+      end
     end
     screen_dirty = true
   end
@@ -94,7 +95,7 @@ function randomize_seq(strength)
     -- Stronger partial randomization (40% of loop_length)
     local num_to_change = math.max(1, math.floor(loop_length * 0.4 + 0.5))
     
-    -- Create a list of indices we can change -- to exclude the first note change this: for i = 1, loop_length do to for i = 2, loop_length do
+    -- Create a list of indices we can change -- change this to preserve first note: for i = 2, loop_length do
     local changeable_indices = {}
     for i = 1, loop_length do
       table.insert(changeable_indices, i)
@@ -117,7 +118,7 @@ function randomize_seq(strength)
     -- Calculate how many notes to change (15% of loop_length, minimum 1)
     local num_to_change = math.max(1, math.floor(loop_length * 0.15 + 0.5))
     
-    -- Create a list of indices we can change -- to exclude the first note change this: for i = 1, loop_length do to for i = 2, loop_length do
+    -- Create a list of indices we can change -- change this to preserve first note: for i = 2, loop_length do
     local changeable_indices = {}
     for i = 1, loop_length do
       table.insert(changeable_indices, i)
@@ -137,7 +138,7 @@ function randomize_seq(strength)
       end
     end
   elseif strength == -4 or strength == -5 or strength == 4 or strength == 5 then
-    print('locked')    
+    -- sequence locked   
   end
 end
 
@@ -153,12 +154,12 @@ end
 
 function key(n,z)
   if n == 1 and z == 1 then
-    print('Key 1')
-  elseif n == 2 and z == 1 then
-    print('Key 2')
+    alt_mode = true
+  elseif n == 1 and z == 0 then
+    alt_mode = false
+  elseif n == 2 and z == 1 and alt_mode == false then
     randomize_seq(0)
-  elseif n == 3 and z == 1 then
-    print('Key 3')
+  elseif n == 3 and z == 1 and alt_mode == false then
     clear_seq()
   end
   screen_dirty = true
@@ -166,13 +167,11 @@ end
 
 function enc(n,d)
   if n == 1 then
-    print(enc1)
-  elseif n == 2 then
-    enc2 = util.clamp(enc2 + d,1,16)
-    loop_length = enc2
-  elseif n == 3 then
-    enc3 = util.clamp(enc3 + d,1,#timings)
-    selected_timing = enc3
+    -- encoder 1
+  elseif n == 2  and alt_mode == false then
+    loop_length = util.clamp(loop_length + d,1,16)
+  elseif n == 3  and alt_mode == false then
+    -- encoder 3
   end
   screen_dirty = true
 end
@@ -195,9 +194,6 @@ function redraw()
     screen.text(rand_display[4])
   end
   
-  screen.move(117, 15)
-  screen.text_right(timings_display[selected_timing])
-  
   -- Calculate step width to fit 16 steps across screen with padding
   local start_x = 8
   local end_x = 120
@@ -216,8 +212,8 @@ function redraw()
     end
     
     -- Draw horizontal line representing the step value
-    -- Add offset to keep lines above baseline (16 is baseline offset, +12 keeps negative values visible)
-    screen.move(x_pos, 16 + data[i] + 12)
+    -- Add offset to keep lines above baseline (15 is baseline offset, +12 keeps negative values visible)
+    screen.move(x_pos, 15 + data[i] + 12)
     screen.line_rel(5, 0)
     screen.stroke()
   end
