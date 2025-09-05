@@ -264,7 +264,7 @@ function redraw()
   -- Draw baseline
   screen.level(2)
   screen.move(start_x, 55)
-  local baseline_end_x = start_x + (loop_length) * step_width
+  local baseline_end_x = start_x + (loop_length) * step_width - 2
   screen.line_rel(baseline_end_x - start_x, 0)
   screen.stroke()
   
