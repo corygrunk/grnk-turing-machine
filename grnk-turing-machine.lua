@@ -12,7 +12,7 @@ counter = 0
 loop_length = 8
 data = {999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999}
 knob_val = 0
-rand_display = {'locked', 'evolve a bit', 'evolve', 'randomize'}
+rand_display = {'\u{0f8}', '\u{0b0}', '\u{02a}', '\u{07e}' } -- locked, evolve a little, evolve, random
 
 function init() 
   crow.input[1].mode('stream', 0.1)
