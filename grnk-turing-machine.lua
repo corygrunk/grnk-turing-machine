@@ -1,5 +1,12 @@
--- grunk-turing-machine
--- crow is now a turing machine
+-- GRNK Turing Machine
+-- Turing maching for norns
+
+-- enc1: go from random to locked
+-- enc2: loop length
+-- key2: randomize sequence
+-- key3: clear sequence
+
+engine.name = 'PolyPerc'
 
 Tab = require('tabutil')
 MusicUtil = require('musicutil')
@@ -12,6 +19,7 @@ counter = 0
 loop_length = 8
 data = {999,999,999,999,999,999,999,999,999,999,999,999,999,999,999,999}
 knob_val = 0
+internal_knob_val = 0
 rand_display = {'\u{0f8}', '\u{0b0}', '\u{02a}', '\u{07e}' } -- locked, evolve a little, evolve, random
 
 function init() 
@@ -35,6 +43,10 @@ function init()
     action = function() build_scale() end} -- by employing build_scale() here, we update the scale
 
   build_scale() -- builds initial scale
+  
+  params:add{type = "option", id = "outs", name = "outs",
+  options = {"audio", "crow", "jf"},
+  default = 1}
   
   params:add{type = "option", id = "note_div", name = "note division",
   options = {1, 2, 4, 8, 16},
@@ -69,17 +81,30 @@ function main_clock()
     clock.sync(1/params:get("note_div"))
     counter = counter + 1
     if counter > loop_length then counter = 1 end
-    if counter == 1 then
+    if counter == 1 and params:get('outs') == 1 then
+      randomize_seq(internal_knob_val)
+    elseif counter == 1 and params:get('outs') == 2 then
       randomize_seq(knob_val)
     else
         
     end
     if data[counter] ~= 999 then
       if math.random(0,99) < params:get("prob") then
+        
+        if params:get('outs') == 1 then -- 'audio'
+          local freq = MusicUtil.note_num_to_freq(params:get("root_note") + data[counter])
+          engine.hz(freq)
+          engine.release(math.random(1,20) * 0.1)
+        
+        elseif params:get('outs') == 2 then  -- 'crow'
         -- Convert display value back to actual CV relative to root note
         local actual_cv = (params:get("root_note") + data[counter] - 60) / 12
         crow.output[1].volts = actual_cv
         crow.output[2]()
+        
+        elseif params:get('outs') == 3 then -- 'jf'
+          print('jf')
+        end
       end
     end
     screen_dirty = true
@@ -167,7 +192,7 @@ end
 
 function enc(n,d)
   if n == 1 then
-    -- encoder 1
+    internal_knob_val = util.clamp(internal_knob_val + d,0,5)
   elseif n == 2  and alt_mode == false then
     loop_length = util.clamp(loop_length + d,1,16)
   elseif n == 3  and alt_mode == false then
@@ -183,16 +208,34 @@ function redraw()
   screen.font_size(8)
   screen.level(15)
   
-  screen.move(10, 15)
-  if knob_val == -5 or knob_val == -4 or knob_val == 4 or knob_val == 5 then
-    screen.text(rand_display[1])
-  elseif knob_val == -3 or knob_val == -2 or knob_val == 2 or knob_val == 3 then
-    screen.text(rand_display[2])
-  elseif knob_val == -1 or knob_val == 1 then
-    screen.text(rand_display[3])
-  else
-    screen.text(rand_display[4])
+  -- for troubleshooting
+  -- screen.move(10, 15)
+  -- screen.text(internal_knob_val)
+  
+  screen.move(120, 15)
+  
+  if params:get('outs') == 1 then
+    if internal_knob_val == -5 or internal_knob_val == -4 or internal_knob_val == 4 or internal_knob_val == 5 then
+      screen.text_right(rand_display[1])
+    elseif internal_knob_val == -3 or internal_knob_val == -2 or internal_knob_val == 2 or internal_knob_val == 3 then
+      screen.text_right(rand_display[2])
+    elseif internal_knob_val == -1 or internal_knob_val == 1 then
+      screen.text_right(rand_display[3])
+    else
+      screen.text_right(rand_display[4])
+    end     
+  elseif params:get('outs') == 2 or params:get('outs') == 3 then
+    if knob_val == -5 or knob_val == -4 or knob_val == 4 or knob_val == 5 then
+      screen.text_right(rand_display[1])
+    elseif knob_val == -3 or knob_val == -2 or knob_val == 2 or knob_val == 3 then
+      screen.text_right(rand_display[2])
+    elseif knob_val == -1 or knob_val == 1 then
+      screen.text_right(rand_display[3])
+    else
+      screen.text_right(rand_display[4])
+    end    
   end
+
   
   -- Calculate step width to fit 16 steps across screen with padding
   local start_x = 8
